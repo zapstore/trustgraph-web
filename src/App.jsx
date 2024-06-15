@@ -59,9 +59,10 @@ function App() {
   return (
     <div class={styles.App}>
       <h1>nostr trustgraph</h1>
-      <p>Calculate <strong><code>source</code>'s follows who follow <code>target</code></strong> from the trustgraph API, sorted by PageRank.</p>
-      <p><strong>Alpha software</strong>, expect bugs! More APIs coming soon.</p>
-      <p><br/></p>
+      <p><strong>The trust APIs used in <u><a href="https://zap.store">zap.store</a></u></strong></p>
+
+      <h2>Follows-who-follow API</h2>
+      <p>Calculate <code>source</code>'s follows who follow <code>target</code> from the trustgraph API, sorted by popularity in the graph (PageRank).</p>
 
       <label for="source">Source npub:</label>
       <input disabled={isCalculated()} type="text" name="source" required value={source()} onChange={(e) => setSource(e.target.value)} />
@@ -98,9 +99,7 @@ function App() {
 
       <Show when={isCalculated() && !responseAuthors()}>
         <div class={styles.result}>
-          <svg class={styles.spinner} viewBox="0 0 50 50">
-            <circle class={styles.path} cx="25" cy="25" r="10" fill="none" stroke-width="5"></circle>
-          </svg>
+          {spinnerSvg}
         </div>
       </Show>
       
@@ -161,3 +160,7 @@ const warningSvg = () => <svg viewBox="0 0 512 512" version="1.1" xmlns="http://
     </g>
 </g>
 </svg>;
+
+const spinnerSvg = () => <svg class={styles.spinner} viewBox="0 0 50 50">
+  <circle class={styles.path} cx="25" cy="25" r="10" fill="none" stroke-width="5"></circle>
+  </svg>;
