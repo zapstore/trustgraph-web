@@ -1,17 +1,18 @@
 import styles from './App.module.css';
-import { For, createSignal, createEffect, on } from 'solid-js';
+import { For, createSignal } from 'solid-js';
 import { createMutable } from "solid-js/store";
 import { SimplePool } from "nostr-tools/pool";
 import { decode, npubEncode } from 'nostr-tools/nip19';
 
-const userStore = createMutable({});
+const users = createMutable({});
 
 export const pool = new SimplePool();
 
 function App() {
   const [source, setSource] = createSignal('');
   const [target, setTarget] = createSignal('');
-  const [responseAuthors, setResponseAuthors] = createSignal([]);
+
+  const [responseAuthors, setResponseAuthors] = createSignal(null);
   const [isDirectFollow, setDirectFollow] = createSignal(false);
   const [isCalculated, setCalculated] = createSignal(false);
   const [relays, setRelays] = createSignal('wss://relay.damus.io, wss://relay.nostr.band');
@@ -28,10 +29,10 @@ function App() {
       }
       const data = await response.json();
       const requestAuthors = [source, target].map((e) => decode(e).data);
-      const responseAuthors = Object.keys(data).filter(e => e !== source).map((e) => decode(e).data);
+      const responseAuthors = Object.keys(data).filter(e => e !== source && e !== target).map((e) => decode(e).data);
       const r = await pool.querySync(relays().split(',').map(r => r.trim()), { kinds: [0], authors: [...requestAuthors, ...responseAuthors] });
       for (const e of r) {
-        userStore[e.pubkey] = JSON.parse(e.content);
+        users[e.pubkey] = JSON.parse(e.content);
       }
       setResponseAuthors(responseAuthors);
       setDirectFollow(Object.keys(data).includes(source));
@@ -45,7 +46,10 @@ function App() {
     try {
       const r = await pool.querySync(relays().split(',').map(r => r.trim()), { kinds: [3], authors });
       for (const e of r) {
-        userStore[e.pubkey] = {...userStore[e.pubkey], follows: e.tags.filter(t => t[0] == 'p').map(t => t[1]) };
+        const user = users[e.pubkey];
+        if (user) {
+          user.follows = e.tags.filter(t => t[0] == 'p').map(t => t[1]);
+        }
       }
     } catch (e) {
       setError(e.message);
@@ -82,15 +86,24 @@ function App() {
         </div>
       </Show>
       
-      <Show when={responseAuthors().length}>
+      <Show when={responseAuthors()}>
         <div class={styles.result}>
           <Avatar pubkey={decode(source()).data} checkFollows={responseAuthors()} suffix={isDirectFollow() ? `also follows` : `follows`} />
-          <For each={responseAuthors()}>
-            {f => <div class={styles.follows}><Avatar pubkey={f} checkFollows={[decode(target()).data]} /></div>}
-          </For>
-          <Avatar pubkey={decode(target()).data} prefix="who all follow" />
+            <For each={responseAuthors()} fallback={<div/>}>
+              {f => <div class={styles.follows}><Avatar pubkey={f} checkFollows={[decode(target()).data]} /></div>}
+            </For>
+          <Avatar pubkey={decode(target()).data} prefix={responseAuthors().length ? "who all follow" : "no one who follows"} />
         </div>
       </Show>
+
+      <Show when={isCalculated() && !responseAuthors()}>
+        <div class={styles.result}>
+          <svg class={styles.spinner} viewBox="0 0 50 50">
+            <circle class={styles.path} cx="25" cy="25" r="10" fill="none" stroke-width="5"></circle>
+          </svg>
+        </div>
+      </Show>
+      
       <p>Once the result is returned from the API, verify its validity by pulling contact lists from chosen relays. You should see a green verified icon <span class={styles.icon}>{verifiedSvg()}</span> next to each verified contact list, and a yellow warning icon <span class={styles.icon}>{warningSvg()}</span> if something did not add up in that contact list.</p>
       
       <button disabled={isVerified()} onClick={() => verify([decode(source()).data, ...responseAuthors()])}>Verify result client-side</button>
@@ -103,9 +116,11 @@ function App() {
 export default App;
 
 function Avatar(props) {
-  const user = () => userStore[props.pubkey];
+  const user = () => {
+    return users[props.pubkey];
+  };
   if (!user()) {
-    return <div/>;
+    return <div></div>;
   }
   return <div class={styles.row}>
     <div class={styles.prefix}>
